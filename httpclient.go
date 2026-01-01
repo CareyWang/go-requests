@@ -1,11 +1,14 @@
 package requests
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 )
 
 // Get sends a GET request.
@@ -59,6 +62,17 @@ func do(method, rawURL string, opts ...Option) (*Response, error) {
 		return nil, classifyErr(err)
 	}
 
+	if req.decompressGzip && !resp.Uncompressed && isGzipEncoded(resp.Header) {
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("%w: %v", ErrResponse, err)
+		}
+		resp.Body = gzipReadCloser{Reader: gz, closer: resp.Body}
+		resp.Header.Del("Content-Encoding")
+		resp.Uncompressed = true
+	}
+
 	wrapped := newResponse(resp)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return wrapped, &StatusError{StatusCode: resp.StatusCode, Response: wrapped}
@@ -103,4 +117,30 @@ func classifyErr(err error) error {
 		return fmt.Errorf("%w: %v", ErrTimeout, err)
 	}
 	return fmt.Errorf("%w: %v", ErrNetwork, err)
+}
+
+type gzipReadCloser struct {
+	*gzip.Reader
+	closer io.Closer
+}
+
+func (g gzipReadCloser) Close() error {
+	err := g.Reader.Close()
+	if cerr := g.closer.Close(); cerr != nil {
+		return cerr
+	}
+	return err
+}
+
+func isGzipEncoded(h http.Header) bool {
+	enc := h.Get("Content-Encoding")
+	if enc == "" {
+		return false
+	}
+	for part := range strings.SplitSeq(enc, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "gzip") {
+			return true
+		}
+	}
+	return false
 }

@@ -11,6 +11,8 @@ var (
 	ErrTimeout = fmt.Errorf("timeout")
 	// ErrStatus indicates a non-2xx HTTP status.
 	ErrStatus = fmt.Errorf("unexpected status")
+	// ErrResponse indicates a response read or decode error.
+	ErrResponse = fmt.Errorf("response error")
 	// ErrResponseNil indicates a nil response or body.
 	ErrResponseNil = fmt.Errorf("nil response")
 	// ErrNoContent indicates an empty response body.

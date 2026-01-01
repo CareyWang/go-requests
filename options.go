@@ -54,6 +54,13 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
+// WithDecompressGzip enables gzip auto-decompression for response bodies.
+func WithDecompressGzip() Option {
+	return func(r *Request) {
+		r.decompressGzip = true
+	}
+}
+
 // WithJSON encodes v as JSON and sets Content-Type if missing.
 func WithJSON(v any) Option {
 	return func(r *Request) {

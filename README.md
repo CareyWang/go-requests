@@ -9,6 +9,7 @@
 - 响应辅助函数：`Bytes`, `Text`, `JSON`
 - 清晰的错误语义，带有类型化错误
 - 可选的 `Session` 用于设置默认值
+- 可选的 gzip 自动解压
 
 ## 安装
 
@@ -84,6 +85,16 @@ if errors.Is(err, requests.ErrTimeout) {
 }
 ```
 
+### gzip 自动解压
+
+```go
+resp, err := requests.Get("https://example.com",
+	requests.WithHeader("Accept-Encoding", "gzip"),
+	requests.WithDecompressGzip(),
+)
+text, _ := resp.Text()
+```
+
 ### 重定向控制
 
 ```go
@@ -150,6 +161,7 @@ func WithHeader(key, value string) Option
 func WithHeaders(h map[string]string) Option
 func WithQuery(q map[string]string) Option
 func WithTimeout(d time.Duration) Option
+func WithDecompressGzip() Option
 func WithJSON(v any) Option
 func WithForm(values map[string]string) Option
 func WithBody(body io.Reader) Option
@@ -180,6 +192,7 @@ var (
 	ErrNetwork = fmt.Errorf("network error")
 	ErrTimeout = fmt.Errorf("timeout")
 	ErrStatus  = fmt.Errorf("unexpected status")
+	ErrResponse = fmt.Errorf("response error")
 	ErrResponseNil = fmt.Errorf("nil response")
 	ErrNoContent   = fmt.Errorf("empty response body")
 )
@@ -197,6 +210,8 @@ type StatusError struct {
 - 其他传输故障返回 `errors.Is(err, ErrNetwork)`
 - `Response.JSON` 在空响应体时返回 `ErrNoContent`
 - `Response.Bytes` 在响应或响应体为 nil 时返回 `ErrResponseNil`
+- `Response.Bytes` 在读取或解压失败时返回 `ErrResponse`
+- `Response.JSON` 在解码失败时返回 `ErrResponse`
 
 ## 许可证
 

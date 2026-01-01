@@ -9,16 +9,17 @@ import (
 
 // Request holds request state built from options.
 type Request struct {
-	method      string
-	url         string
-	headers     http.Header
-	query       url.Values
-	body        io.Reader
-	timeout     time.Duration
-	cookies     []*http.Cookie
-	proxy       *url.URL
-	redirectMax *int
-	err         error
+	method         string
+	url            string
+	headers        http.Header
+	query          url.Values
+	body           io.Reader
+	timeout        time.Duration
+	cookies        []*http.Cookie
+	proxy          *url.URL
+	redirectMax    *int
+	decompressGzip bool
+	err            error
 }
 
 func newRequest(method, rawURL string, opts ...Option) *Request {

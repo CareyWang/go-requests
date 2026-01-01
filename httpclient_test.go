@@ -1,6 +1,8 @@
 package requests
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -106,6 +108,44 @@ func TestText(t *testing.T) {
 	text, err := resp.Text()
 	assert.NoError(t, err)
 	assert.Equal(t, "hello world", text)
+}
+
+func TestGzipAutoDecompress(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte("hello gzip"))
+		assert.NoError(t, gz.Close())
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer srv.Close()
+
+	resp, err := Get(srv.URL, WithHeader("Accept-Encoding", "gzip"), WithDecompressGzip())
+	assert.NoError(t, err)
+	text, err := resp.Text()
+	assert.NoError(t, err)
+	assert.Equal(t, "hello gzip", text)
+}
+
+func TestGzipWithoutDecompressOption(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte("hello gzip"))
+		assert.NoError(t, gz.Close())
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer srv.Close()
+
+	resp, err := Get(srv.URL, WithHeader("Accept-Encoding", "gzip"))
+	assert.NoError(t, err)
+	b, err := resp.Bytes()
+	assert.NoError(t, err)
+	assert.True(t, len(b) >= 2)
+	assert.Equal(t, byte(0x1f), b[0])
+	assert.Equal(t, byte(0x8b), b[1])
 }
 
 func TestPut(t *testing.T) {
@@ -463,7 +503,9 @@ func TestJSONInvalidBody(t *testing.T) {
 	resp, err := Get(srv.URL)
 	assert.NoError(t, err)
 	var out map[string]any
-	assert.Error(t, resp.JSON(&out))
+	err = resp.JSON(&out)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrResponse)
 }
 
 func TestTextNilResponse(t *testing.T) {

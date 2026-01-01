@@ -2,6 +2,7 @@ package requests
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -37,6 +38,9 @@ func (r *Response) Bytes() ([]byte, error) {
 	r.once.Do(func() {
 		defer r.Raw.Body.Close()
 		r.body, r.bodyErr = io.ReadAll(r.Raw.Body)
+		if r.bodyErr != nil {
+			r.bodyErr = fmt.Errorf("%w: %v", ErrResponse, r.bodyErr)
+		}
 	})
 	return r.body, r.bodyErr
 }
@@ -56,5 +60,8 @@ func (r *Response) JSON(v any) error {
 	if len(b) == 0 {
 		return ErrNoContent
 	}
-	return json.Unmarshal(b, v)
+	if err := json.Unmarshal(b, v); err != nil {
+		return fmt.Errorf("%w: %v", ErrResponse, err)
+	}
+	return nil
 }
