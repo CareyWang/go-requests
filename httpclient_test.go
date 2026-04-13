@@ -3,6 +3,7 @@ package requests
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ func TestGetWithQueryAndHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL, WithQuery(map[string]string{"q": "x"}), WithHeader("X-Test", "1"))
+	resp, err := Get(context.Background(), srv.URL, WithQuery(map[string]string{"q": "x"}), WithHeader("X-Test", "1"))
 	assert.NoError(t, err)
 
 	var out struct {
@@ -45,7 +46,7 @@ func TestPostWithJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Post(srv.URL, WithJSON(map[string]any{"name": "alice"}))
+	resp, err := Post(context.Background(), srv.URL, WithJSON(map[string]any{"name": "alice"}))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 }
@@ -57,7 +58,7 @@ func TestStatusError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL)
+	resp, err := Get(context.Background(), srv.URL)
 	assert.Error(t, err)
 	var se *StatusError
 	assert.ErrorAs(t, err, &se)
@@ -73,9 +74,38 @@ func TestTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL, WithTimeout(50*time.Millisecond))
+	_, err := Get(context.Background(), srv.URL, WithTimeout(50*time.Millisecond))
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrTimeout)
+}
+
+func TestContextCancellation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = io.WriteString(w, "late")
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := Get(ctx, srv.URL)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrTimeout)
+}
+
+func TestContextCancel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = io.WriteString(w, "late")
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := Get(ctx, srv.URL)
+	assert.Error(t, err)
 }
 
 func TestJSONEmptyBody(t *testing.T) {
@@ -84,7 +114,7 @@ func TestJSONEmptyBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL)
+	resp, err := Get(context.Background(), srv.URL)
 	assert.NoError(t, err)
 	var out map[string]any
 	assert.ErrorIs(t, resp.JSON(&out), ErrNoContent)
@@ -103,7 +133,7 @@ func TestText(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL)
+	resp, err := Get(context.Background(), srv.URL)
 	assert.NoError(t, err)
 	text, err := resp.Text()
 	assert.NoError(t, err)
@@ -121,7 +151,7 @@ func TestGzipAutoDecompress(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL, WithHeader("Accept-Encoding", "gzip"), WithDecompressGzip())
+	resp, err := Get(context.Background(), srv.URL, WithHeader("Accept-Encoding", "gzip"), WithDecompressGzip())
 	assert.NoError(t, err)
 	text, err := resp.Text()
 	assert.NoError(t, err)
@@ -139,7 +169,7 @@ func TestGzipWithoutDecompressOption(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL, WithHeader("Accept-Encoding", "gzip"))
+	resp, err := Get(context.Background(), srv.URL, WithHeader("Accept-Encoding", "gzip"))
 	assert.NoError(t, err)
 	b, err := resp.Bytes()
 	assert.NoError(t, err)
@@ -155,7 +185,7 @@ func TestPut(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Put(srv.URL)
+	_, err := Put(context.Background(), srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -166,7 +196,7 @@ func TestPatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Patch(srv.URL)
+	_, err := Patch(context.Background(), srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -177,7 +207,7 @@ func TestDelete(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Delete(srv.URL)
+	_, err := Delete(context.Background(), srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -188,7 +218,7 @@ func TestHead(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Head(srv.URL)
+	resp, err := Head(context.Background(), srv.URL)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -200,7 +230,7 @@ func TestOptions(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Options(srv.URL)
+	_, err := Options(context.Background(), srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -211,7 +241,7 @@ func TestWithHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL, WithHeaders(map[string]string{
+	_, err := Get(context.Background(), srv.URL, WithHeaders(map[string]string{
 		"X-Custom":  "value",
 		"X-Another": "test",
 	}))
@@ -224,7 +254,7 @@ func TestWithHeaderOverwrite(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL, WithHeader("X-Key", "first"), WithHeader("X-Key", "second"))
+	_, err := Get(context.Background(), srv.URL, WithHeader("X-Key", "first"), WithHeader("X-Key", "second"))
 	assert.NoError(t, err)
 }
 
@@ -235,7 +265,7 @@ func TestWithForm(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Post(srv.URL, WithForm(map[string]string{"name": "bob"}))
+	_, err := Post(context.Background(), srv.URL, WithForm(map[string]string{"name": "bob"}))
 	assert.NoError(t, err)
 }
 
@@ -245,7 +275,7 @@ func TestWithFormOverridesContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Post(srv.URL, WithHeader("Content-Type", "text/plain"), WithForm(map[string]string{"name": "bob"}))
+	_, err := Post(context.Background(), srv.URL, WithHeader("Content-Type", "text/plain"), WithForm(map[string]string{"name": "bob"}))
 	assert.NoError(t, err)
 }
 
@@ -255,7 +285,7 @@ func TestWithJSONRespectsExistingContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Post(srv.URL, WithHeader("Content-Type", "text/plain"), WithJSON(map[string]any{"name": "alice"}))
+	_, err := Post(context.Background(), srv.URL, WithHeader("Content-Type", "text/plain"), WithJSON(map[string]any{"name": "alice"}))
 	assert.NoError(t, err)
 }
 
@@ -266,7 +296,7 @@ func TestWithBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Post(srv.URL, WithBody(strings.NewReader("raw body")))
+	_, err := Post(context.Background(), srv.URL, WithBody(strings.NewReader("raw body")))
 	assert.NoError(t, err)
 }
 
@@ -278,7 +308,7 @@ func TestWithCookies(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL, WithCookies(&http.Cookie{Name: "session", Value: "abc123"}))
+	_, err := Get(context.Background(), srv.URL, WithCookies(&http.Cookie{Name: "session", Value: "abc123"}))
 	assert.NoError(t, err)
 }
 
@@ -293,7 +323,7 @@ func TestWithProxy(t *testing.T) {
 	}))
 	defer target.Close()
 
-	_, err := Get(target.URL, WithProxy(proxy.URL))
+	_, err := Get(context.Background(), target.URL, WithProxy(proxy.URL))
 	assert.Error(t, err)
 	var se *StatusError
 	assert.ErrorAs(t, err, &se)
@@ -310,7 +340,7 @@ func TestWithRedirect(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL+"/redirect", WithRedirect(0))
+	_, err := Get(context.Background(), srv.URL+"/redirect", WithRedirect(0))
 	assert.Error(t, err)
 	var se *StatusError
 	assert.ErrorAs(t, err, &se)
@@ -330,7 +360,7 @@ func TestWithRedirectLimit(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL+"/a", WithRedirect(1))
+	_, err := Get(context.Background(), srv.URL+"/a", WithRedirect(1))
 	assert.Error(t, err)
 	var se *StatusError
 	assert.ErrorAs(t, err, &se)
@@ -347,7 +377,7 @@ func TestWithRedirectAllow(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL+"/redirect", WithRedirect(1))
+	resp, err := Get(context.Background(), srv.URL+"/redirect", WithRedirect(1))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -360,7 +390,7 @@ func TestSession(t *testing.T) {
 	defer srv.Close()
 
 	session := NewSession(WithHeader("X-Session", "value"))
-	_, err := session.Post(srv.URL)
+	_, err := session.Post(context.Background(), srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -372,16 +402,17 @@ func TestSessionMethods(t *testing.T) {
 	defer srv.Close()
 
 	session := NewSession(WithHeader("X-Session", "value"))
+	ctx := context.Background()
 
-	_, err := session.Put(srv.URL)
+	_, err := session.Put(ctx, srv.URL)
 	assert.NoError(t, err)
-	_, err = session.Patch(srv.URL)
+	_, err = session.Patch(ctx, srv.URL)
 	assert.NoError(t, err)
-	_, err = session.Delete(srv.URL)
+	_, err = session.Delete(ctx, srv.URL)
 	assert.NoError(t, err)
-	_, err = session.Head(srv.URL)
+	_, err = session.Head(ctx, srv.URL)
 	assert.NoError(t, err)
-	_, err = session.Options(srv.URL)
+	_, err = session.Options(ctx, srv.URL)
 	assert.NoError(t, err)
 }
 
@@ -392,7 +423,7 @@ func TestSessionOverrideOptions(t *testing.T) {
 	defer srv.Close()
 
 	session := NewSession(WithHeader("X-Key", "default"))
-	_, err := session.Get(srv.URL, WithHeader("X-Key", "override"))
+	_, err := session.Get(context.Background(), srv.URL, WithHeader("X-Key", "override"))
 	assert.NoError(t, err)
 }
 
@@ -404,18 +435,18 @@ func TestBuildURLWithExistingQuery(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Get(srv.URL+"?a=1", WithQuery(map[string]string{"a": "3", "b": "2"}))
+	_, err := Get(context.Background(), srv.URL+"?a=1", WithQuery(map[string]string{"a": "3", "b": "2"}))
 	assert.NoError(t, err)
 }
 
 func TestInvalidURL(t *testing.T) {
-	_, err := Get("://invalid")
+	_, err := Get(context.Background(), "://invalid")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrRequest)
 }
 
 func TestNetworkError(t *testing.T) {
-	_, err := Get("http://localhost:9999")
+	_, err := Get(context.Background(), "http://localhost:9999")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrNetwork)
 }
@@ -439,7 +470,7 @@ func TestNetworkTimeoutError(t *testing.T) {
 		http.DefaultTransport = prev
 	})
 
-	_, err := Get("http://example.com")
+	_, err := Get(context.Background(), "http://example.com")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrTimeout)
 }
@@ -448,13 +479,13 @@ func TestWithJSONError(t *testing.T) {
 	ch := make(chan int)
 	defer close(ch)
 
-	_, err := Post("http://example.com", WithJSON(ch))
+	_, err := Post(context.Background(), "http://example.com", WithJSON(ch))
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrRequest)
 }
 
 func TestWithProxyError(t *testing.T) {
-	_, err := Get("http://example.com", WithProxy("://invalid"))
+	_, err := Get(context.Background(), "http://example.com", WithProxy("://invalid"))
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrRequest)
 }
@@ -500,7 +531,7 @@ func TestJSONInvalidBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := Get(srv.URL)
+	resp, err := Get(context.Background(), srv.URL)
 	assert.NoError(t, err)
 	var out map[string]any
 	err = resp.JSON(&out)

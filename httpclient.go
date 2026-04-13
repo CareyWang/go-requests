@@ -12,31 +12,41 @@ import (
 )
 
 // Get sends a GET request.
-func Get(url string, opts ...Option) (*Response, error) { return do(http.MethodGet, url, opts...) }
+func Get(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodGet, url, opts...)
+}
 
 // Post sends a POST request.
-func Post(url string, opts ...Option) (*Response, error) { return do(http.MethodPost, url, opts...) }
+func Post(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodPost, url, opts...)
+}
 
 // Put sends a PUT request.
-func Put(url string, opts ...Option) (*Response, error) { return do(http.MethodPut, url, opts...) }
+func Put(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodPut, url, opts...)
+}
 
 // Patch sends a PATCH request.
-func Patch(url string, opts ...Option) (*Response, error) { return do(http.MethodPatch, url, opts...) }
+func Patch(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodPatch, url, opts...)
+}
 
 // Delete sends a DELETE request.
-func Delete(url string, opts ...Option) (*Response, error) {
-	return do(http.MethodDelete, url, opts...)
+func Delete(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodDelete, url, opts...)
 }
 
 // Head sends a HEAD request.
-func Head(url string, opts ...Option) (*Response, error) { return do(http.MethodHead, url, opts...) }
-
-// Options sends an OPTIONS request.
-func Options(url string, opts ...Option) (*Response, error) {
-	return do(http.MethodOptions, url, opts...)
+func Head(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodHead, url, opts...)
 }
 
-func do(method, rawURL string, opts ...Option) (*Response, error) {
+// Options sends an OPTIONS request.
+func Options(ctx context.Context, url string, opts ...Option) (*Response, error) {
+	return do(ctx, http.MethodOptions, url, opts...)
+}
+
+func do(ctx context.Context, method, rawURL string, opts ...Option) (*Response, error) {
 	req := newRequest(method, rawURL, opts...)
 	if req.err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrRequest, req.err)
@@ -45,7 +55,7 @@ func do(method, rawURL string, opts ...Option) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrRequest, err)
 	}
-	httpReq, err := http.NewRequest(method, u.String(), req.body)
+	httpReq, err := http.NewRequestWithContext(ctx, method, u.String(), req.body)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrRequest, err)
 	}
